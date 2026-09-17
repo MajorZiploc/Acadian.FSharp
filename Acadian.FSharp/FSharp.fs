@@ -205,26 +205,26 @@ module Option =
 
 
 module Result =
-    let runUntilAsync (predicate: Result<'a,'error> -> bool) (fn: (Result<'a,'error> list -> Async<Result<'a,'error>>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
+    let runUntilAsync (predicate: int -> Result<'a,'error> -> bool) (fn: (int -> Result<'a,'error> list -> Async<Result<'a,'error>>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
       let rec runUntilAsyncHelper (curIteration: int) (pastResults: Result<'a,'error> list) (lastResult: Result<'a,'error>) = async {
         if curIteration > maxIterations then
           return lastResult
         else
-          let! res = pastResults |> fn
-          if res |> predicate then
+          let! res = pastResults |> fn curIteration
+          if res |> predicate curIteration then
             return res
           else
             return! runUntilAsyncHelper (curIteration+1) (res::pastResults) res
       }
       runUntilAsyncHelper 0 [] fallbackResult
 
-    let runUntil (predicate: Result<'a,'error> -> bool) (fn: (Result<'a,'error> list -> Result<'a,'error>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
+    let runUntil (predicate: int -> Result<'a,'error> -> bool) (fn: (int -> Result<'a,'error> list -> Result<'a,'error>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
       let rec runUntilHelper (curIteration: int) (pastResults: Result<'a,'error> list) (lastResult: Result<'a,'error>) =
         if curIteration > maxIterations then
           lastResult
         else
-          let res = pastResults |> fn
-          if res |> predicate then
+          let res = pastResults |> fn curIteration
+          if res |> predicate curIteration then
             res
           else
             runUntilHelper (curIteration+1) (res::pastResults) res

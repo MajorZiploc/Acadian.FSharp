@@ -205,6 +205,31 @@ module Option =
 
 
 module Result =
+    let runUntilAsync (predicate: Result<'a,'error> -> bool) (fn: (Result<'a,'error> list -> Async<Result<'a,'error>>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
+      let rec runUntilAsyncHelper (curIteration: int) (pastResults: Result<'a,'error> list) (lastResult: Result<'a,'error>) = async {
+        if curIteration > maxIterations then
+          return lastResult
+        else
+          let! res = pastResults |> fn
+          if res |> predicate then
+            return res
+          else
+            return! runUntilAsyncHelper (curIteration+1) (res::pastResults) res
+      }
+      runUntilAsyncHelper 0 [] fallbackResult
+
+    let runUntil (predicate: Result<'a,'error> -> bool) (fn: (Result<'a,'error> list -> Result<'a,'error>)) (maxIterations: int) (fallbackResult: Result<'a,'error>) =
+      let rec runUntilHelper (curIteration: int) (pastResults: Result<'a,'error> list) (lastResult: Result<'a,'error>) =
+        if curIteration > maxIterations then
+          lastResult
+        else
+          let res = pastResults |> fn
+          if res |> predicate then
+            res
+          else
+            runUntilHelper (curIteration+1) (res::pastResults) res
+      runUntilHelper 0 [] fallbackResult
+
     /// Returns true if res is an Ok value; false otherwise.
     let inline isOk res =
         match res with
@@ -337,7 +362,7 @@ module Task =
 
 module List =
   let runUntilResAsync (predicate: Result<'a,'error> -> bool) (fallbackError: Result<'a,'error>) (fns: (unit -> Async<Result<'a,'error>>) list) =
-    let rec runUntilResAsyncHelper (predicate: Result<'a,'error> -> bool) (lastError: Result<'a,'error>) (fns: (unit -> Async<Result<'a,'error>>) list) = async {
+    let rec runUntilResAsyncHelper (lastError: Result<'a,'error>) (fns: (unit -> Async<Result<'a,'error>>) list) = async {
       match fns with
       | [] ->
         return lastError
@@ -346,9 +371,9 @@ module List =
         if predicate res then
           return res
         else
-          return! runUntilResAsyncHelper predicate res rest
+          return! runUntilResAsyncHelper res rest
       }
-    runUntilResAsyncHelper predicate fallbackError fns
+    runUntilResAsyncHelper fallbackError fns
 
   let rec runUntilAsync (predicate: 'a -> bool) (fns: (unit -> Async<'a>) list) =
     async {
@@ -364,7 +389,7 @@ module List =
     }
 
   let runUntilRes (predicate: Result<'a,'error> -> bool) (fallbackError: Result<'a,'error>) (fns: (unit -> Result<'a,'error>) list) =
-    let rec runUntilResHelper (predicate: Result<'a,'error> -> bool) (lastError: Result<'a,'error>) (fns: (unit -> Result<'a,'error>) list) =
+    let rec runUntilResHelper (lastError: Result<'a,'error>) (fns: (unit -> Result<'a,'error>) list) =
       match fns with
       | [] -> lastError
       | fn :: rest ->
@@ -372,8 +397,8 @@ module List =
         if predicate res then
           res
         else
-          runUntilResHelper predicate res rest
-    runUntilResHelper predicate fallbackError fns
+          runUntilResHelper res rest
+    runUntilResHelper fallbackError fns
 
   let rec runUntil (predicate: 'a -> bool) (fns: (unit -> 'a) list) =
     match fns with
